@@ -1,0 +1,3 @@
+# 实现的功能
+本节通过在TaskControlBlock中添加syscall_counter数组用来对任务的系统调用进行计数，并在TASK_MANAGER中增加了系统调用计数syscall_add和返回调用次数syscall_count的方法，计数方法在每次系统调用进行匹配前执行，保证sys_trace调用也被记为一次，但该调用可能会出现数组越界等问题。
+# 简答1
