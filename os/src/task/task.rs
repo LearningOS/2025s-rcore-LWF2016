@@ -1,13 +1,14 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{BIG_STRIDE, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use core::cmp::Ordering;
 
 /// Task control block structure
 ///
@@ -33,6 +34,37 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
+    }
+}
+
+/// stride
+pub struct Stride{
+    pub stride: usize,
+}
+
+impl Stride{
+    pub fn new() -> Self{
+        Stride{stride:0}
+    }
+
+    pub fn add(&mut self, x:usize){
+        self.stride += x;
+    }
+}
+
+impl PartialOrd for Stride {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if BIG_STRIDE / 2 < self.stride - other.stride {
+            Some(Ordering::Greater)
+        }else{
+            Some(Ordering::Less)
+        }
+    }
+}
+
+impl PartialEq for Stride {
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }
 
@@ -68,6 +100,12 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Stride
+    pub stride: Stride,
+
+    /// Priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +156,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride: Stride::new(),
+                    priority: 16,
                 })
             },
         };
@@ -191,6 +231,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: Stride::new(),
+                    priority: 16,
                 })
             },
         });

@@ -23,6 +23,14 @@ impl TaskManager {
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
+        // let mut flag = 0;
+        // let queue = &self.ready_queue;
+        // for (index, task) in queue.iter().enumerate(){
+        //     let stride = task.inner_exclusive_access().stride.stride;
+        //     if stride < (*queue)[flag].inner_exclusive_access().stride.stride {
+        //         flag = index;
+        //     }
+        // }
         self.ready_queue.pop_front()
     }
 }

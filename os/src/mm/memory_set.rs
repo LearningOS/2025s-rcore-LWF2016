@@ -32,8 +32,10 @@ lazy_static! {
 }
 /// address space
 pub struct MemorySet {
-    page_table: PageTable,
-    areas: Vec<MapArea>,
+    /// set pub for map
+    pub page_table: PageTable,
+    /// set pub for map
+    pub areas: Vec<MapArea>,
 }
 
 impl MemorySet {
@@ -303,10 +305,14 @@ impl MemorySet {
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
-    vpn_range: VPNRange,
-    data_frames: BTreeMap<VirtPageNum, FrameTracker>,
-    map_type: MapType,
-    map_perm: MapPermission,
+    /// maparea map vpn range
+    pub vpn_range: VPNRange,
+    /// virtpagenum map physpagenum
+    pub data_frames: BTreeMap<VirtPageNum, FrameTracker>,
+    /// map type
+    pub map_type: MapType,
+    /// map permission
+    pub map_perm: MapPermission,
 }
 
 impl MapArea {

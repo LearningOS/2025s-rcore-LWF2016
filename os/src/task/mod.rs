@@ -43,6 +43,11 @@ pub fn suspend_current_and_run_next() {
     // ---- access current TCB exclusively
     let mut task_inner = task.inner_exclusive_access();
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    
+    // Add stride
+    // let pass = BIG_STRIDE / task_inner.priority;
+    // task_inner.stride.add(pass);
+
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
     drop(task_inner);
