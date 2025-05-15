@@ -14,6 +14,8 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::config::PAGE_SIZE;
+use crate::mm::{frame_alloc, MapArea, MapPermission, MapType, PTEFlags, PageTableEntry, PhysPageNum, VirtAddr, VirtPageNum};
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
@@ -153,6 +155,92 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    /// Count syscall times
+    fn count_syscall(&self, id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_counter[id]+=1;
+        drop(inner);
+    }
+
+    /// Return syscall times
+    fn return_syscall_times(&self, id:usize) -> usize{
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let times = inner.tasks[current].syscall_counter[id];
+        drop(inner);
+        times
+    }
+
+    /// Map
+    pub fn map(&self, start: usize, len: usize, prot: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        if prot & !0x7 != 0 || prot & 0x7 == 0{
+            return -1
+        }
+
+        if start % PAGE_SIZE != 0 {
+            return -1
+        }
+
+        let mut area = MapArea::new(VirtAddr::from(start), VirtAddr::from(start+len), MapType::Framed, MapPermission::from_bits((prot << 1) as u8).unwrap());
+        let page_table = &mut inner.tasks[current].memory_set.page_table;
+        for vpn in area.vpn_range{
+            // println!("{:?}", vpn);
+            let pte = page_table.find_pte_create(vpn).unwrap();
+            if pte.is_valid(){
+                // println!("{:?}, {:?}, {:?}, {:?}", current, prot, VirtAddr::from(start), VirtAddr::from(start+len));
+                return -1
+            }
+        }
+
+        for vpn in area.vpn_range {
+            let ppn: PhysPageNum;
+            let frame = frame_alloc().unwrap();
+            ppn = frame.ppn;
+            area.data_frames.insert(vpn, frame);
+            let pte_flags = PTEFlags::from_bits(((prot + 8) << 1) as u8).unwrap();
+            let pte = page_table.find_pte_create(vpn).unwrap();
+            // println!("D{:?}, {:?}, {:?}, {:?}", current, prot, VirtAddr::from(start), VirtAddr::from(start+len));
+            *pte = PageTableEntry::new(ppn, pte_flags | PTEFlags::V);
+        }
+
+        inner.tasks[current].memory_set.areas.push(area);
+        drop(inner);
+        0
+    }
+
+    /// Unmap
+    pub fn unmap(&self, start: usize, len: usize) -> isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let page_table = &inner.tasks[current].memory_set.page_table;
+
+        if start % PAGE_SIZE != 0 {
+            return -1
+        }
+
+        for i in ((start/PAGE_SIZE)..=((start+len-1)/PAGE_SIZE)).into_iter(){
+            let pte = page_table.find_pte(VirtPageNum::from(i)).unwrap();
+            if !pte.is_valid(){
+                return -1
+            }
+        }
+
+        let mem_set = &mut inner.tasks[current].memory_set;
+        for i in ((start/PAGE_SIZE)..=((start+len-1)/PAGE_SIZE)).into_iter(){
+            for area in &mut mem_set.areas{
+                if VirtPageNum::from(i) < area.vpn_range.get_end() && VirtPageNum::from(i) >= area.vpn_range.get_start(){
+                    let page_table = &mut mem_set.page_table;
+                    area.data_frames.remove(&VirtPageNum::from(i));
+                    page_table.unmap(VirtPageNum::from(i));
+                }
+            }
+        }
+        0
+    }
 }
 
 /// Run the first task in task list.
@@ -201,4 +289,14 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// Count the syscall times
+pub fn count_syscall(id: usize) {
+    TASK_MANAGER.count_syscall(id);
+}
+
+/// Return syscall times
+pub fn return_syscall_times(id:usize) -> usize{
+    TASK_MANAGER.return_syscall_times(id)
 }
