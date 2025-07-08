@@ -8,10 +8,14 @@ use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
 pub struct Inode {
-    block_id: usize,
-    block_offset: usize,
-    fs: Arc<Mutex<EasyFileSystem>>,
-    block_device: Arc<dyn BlockDevice>,
+    ///
+    pub block_id: usize,
+    ///
+    pub block_offset: usize,
+    ///
+    pub fs: Arc<Mutex<EasyFileSystem>>,
+    ///
+    pub block_device: Arc<dyn BlockDevice>,
 }
 
 impl Inode {
@@ -30,19 +34,19 @@ impl Inode {
         }
     }
     /// Call a function over a disk inode to read it
-    fn read_disk_inode<V>(&self, f: impl FnOnce(&DiskInode) -> V) -> V {
+    pub fn read_disk_inode<V>(&self, f: impl FnOnce(&DiskInode) -> V) -> V {
         get_block_cache(self.block_id, Arc::clone(&self.block_device))
             .lock()
             .read(self.block_offset, f)
     }
     /// Call a function over a disk inode to modify it
-    fn modify_disk_inode<V>(&self, f: impl FnOnce(&mut DiskInode) -> V) -> V {
+    pub fn modify_disk_inode<V>(&self, f: impl FnOnce(&mut DiskInode) -> V) -> V {
         get_block_cache(self.block_id, Arc::clone(&self.block_device))
             .lock()
             .modify(self.block_offset, f)
     }
     /// Find inode under a disk inode by name
-    fn find_inode_id(&self, name: &str, disk_inode: &DiskInode) -> Option<u32> {
+    pub fn find_inode_id(&self, name: &str, disk_inode: &DiskInode) -> Option<u32> {
         // assert it is a directory
         assert!(disk_inode.is_dir());
         let file_count = (disk_inode.size as usize) / DIRENT_SZ;
@@ -74,7 +78,7 @@ impl Inode {
         })
     }
     /// Increase the size of a disk inode
-    fn increase_size(
+    pub fn increase_size(
         &self,
         new_size: u32,
         disk_inode: &mut DiskInode,
@@ -182,5 +186,29 @@ impl Inode {
             }
         });
         block_cache_sync_all();
+    }
+    /// Get inode nlink
+    pub fn get_inode_nlink(&self) -> u32{
+        self.read_disk_inode(|disk_inode| disk_inode.nlink) as u32
+    }
+    /// Get inode mode
+    pub fn get_inode_mode(&self) -> u32 {
+        self.read_disk_inode(|disk_inode| if disk_inode.is_dir() {
+            0o040000 as u32
+        }else{
+            0o100000 as u32
+        })
+    }
+    /// Get inode id
+    pub fn get_inode_id(&self) -> u64 {
+        let fs = self.fs.lock();
+        (self.block_id as u64 - fs.get_inode_area_start_block()) * 4 + self.block_offset as u64 / 128
+    }
+    /// Add 1 to nlink
+    pub fn add_nlink(&self) -> isize {
+        self.modify_disk_inode(|disk_inode| {
+            disk_inode.nlink += 1;
+        });
+        0
     }
 }

@@ -64,7 +64,7 @@ pub struct TaskControlBlockInner {
 
     /// It is set when active exit or execution error occurs
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub fd_table: Vec<Option<Arc<dyn File>>>,
 
     /// Heap bottom
     pub heap_bottom: usize,
@@ -192,7 +192,7 @@ impl TaskControlBlock {
         let kernel_stack = kstack_alloc();
         let kernel_stack_top = kernel_stack.get_top();
         // copy fd table
-        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        let mut new_fd_table: Vec<Option<Arc<dyn File>>> = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));
