@@ -2,7 +2,7 @@
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
-FS_IMG := ../ci-user/user/build/fs.img
+FS_IMG := ../user/build/fs.img
 
 # BOARD
 BOARD ?= qemu
@@ -11,7 +11,7 @@ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 
 fsimg:
 	cd ../easy-fs-fuse && cargo run --release -- \
-		-s ../ci-user/user/build/elf \
+		-s ../user/build/elf \
 		-o $(FS_IMG)
 
 kernel: fsimg
