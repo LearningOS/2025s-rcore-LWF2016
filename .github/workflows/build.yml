@@ -35,9 +35,8 @@ jobs:
       - name: Run tests
         run: |
           qemu-system-riscv64 --version
-          echo "export RUSTUP_DIST_SERVER=\"https://rsproxy.cn\"" > ~/.bashrc
-          echo "export RUSTUP_UPDATE_ROOT=\"https://rsproxy.cn/rustup\"" > ~/.bashrc
-          source ~/.bashrc
+          export RUSTUP_DIST_SERVER="https://rsproxy.cn"
+          export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
           rustup target add riscv64gc-unknown-none-elf
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2025S.git ci-user
