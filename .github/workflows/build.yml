@@ -33,13 +33,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
+        env:
+          RUSTUP_DIST_SERVER: "https://rsproxy.cn"
+          RUSTUP_UPDATE_ROOT: "https://rsproxy.cn/rustup"
         run: |
           qemu-system-riscv64 --version
-          export RUSTUP_DIST_SERVER="https://rsproxy.cn"
-          export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
-          ls -l ~
           rustup target add riscv64gc-unknown-none-elf
           git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
+          ls -l
           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2025S.git ci-user
           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2025S.git ci-user/user
           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
