@@ -1,10 +1,8 @@
 use crate::{
-    fs::{open_file, OpenFlags},
-    mm::{translated_ref, translated_refmut, translated_str},
-    task::{
+    config::PAGE_SIZE, fs::{open_file, OpenFlags}, mm::{translated_ref, translated_refmut, translated_str, StepByOne, VirtAddr}, task::{
         current_process, current_task, current_user_token, exit_current_and_run_next, pid2process,
         suspend_current_and_run_next, SignalFlags,
-    },
+    }, timer::{get_time_ms, get_time_us}
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 
@@ -151,12 +149,45 @@ pub fn sys_kill(pid: usize, signal: u32) -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().process.upgrade().unwrap().getpid()
     );
-    -1
+    let task = current_task().unwrap();
+    let process = task.process.upgrade().unwrap();
+    let mut inner = process.inner_exclusive_access();
+    let page_table = &mut inner.memory_set.page_table;
+    
+    let start = ts as usize;
+    let start_va = VirtAddr::from(start);
+    
+    let end = start + core::mem::size_of::<TimeVal>();
+    let end_va = VirtAddr::from(end);
+    let time = TimeVal {sec: get_time_ms()/1000, usec: get_time_us()};
+    
+    let ptr = &time as *const TimeVal as *const u8;
+    let mut vpn = start_va.floor();
+    
+    if start_va.page_offset() <= PAGE_SIZE - core::mem::size_of::<TimeVal>(){
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        for (i, offset) in (start_va.page_offset()..end_va.page_offset()).into_iter().enumerate(){
+            unsafe{ppn.get_bytes_array()[offset] = *(ptr.add(i));}
+        }
+    }else{
+        let first_ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let second_ppn = page_table.translate(vpn).unwrap().ppn();
+        let first_mem = first_ppn.get_bytes_array();
+        for (i, offset) in (start_va.page_offset()..PAGE_SIZE).into_iter().enumerate(){
+            unsafe{first_mem[offset] = *(ptr.add(i));}
+        }
+        let second_mem = second_ppn.get_bytes_array();
+        for (i, offset) in (0..end_va.page_offset()).into_iter().enumerate(){
+            unsafe{second_mem[offset] = *(ptr.add(i + PAGE_SIZE - start_va.page_offset()));}
+        }
+    }
+    0
 }
 
 /// mmap syscall
