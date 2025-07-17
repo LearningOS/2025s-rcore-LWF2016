@@ -153,25 +153,26 @@ pub fn sys_semaphore_up(sem_id: usize) -> isize {
     let process = current_process();
     let mut process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
-    let count = sem.inner.exclusive_access().count;
-    if count <= 0 {
-        process_inner.available[sem_id] = 0;
-        process_inner.need[current_task()
-            .unwrap()
-            .inner_exclusive_access()
-            .res
-            .as_ref()
-            .unwrap()
-            .tid][sem_id] -= 1;
-    }else{
-        process_inner.available[sem_id] += 1;
-        process_inner.allocation[current_task()
-            .unwrap()
-            .inner_exclusive_access()
-            .res
-            .as_ref()
-            .unwrap()
-            .tid][sem_id] += 1;
+    if sem_id != 0 {
+        let mut front_tid = 0;
+        if let Some(front_task) = sem.inner.exclusive_access().wait_queue.front() {
+            front_tid = front_task.inner_exclusive_access().res.as_ref().unwrap().tid;
+        }
+        let count = sem.inner.exclusive_access().count;
+        if count < 0 {
+            process_inner.available[sem_id] = 0;
+            process_inner.need[front_tid][sem_id] -= 1;
+            process_inner.allocation[front_tid][sem_id] += 1;
+        }else{
+            process_inner.available[sem_id] += 1;
+            process_inner.allocation[current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid][sem_id] -= 1;
+        }
     }
     drop(process_inner);
     sem.up();
@@ -193,25 +194,73 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
     let process = current_process();
     let mut process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
-    let count = sem.inner.exclusive_access().count;
-    if count < 0 {
-        process_inner.available[sem_id] = 0;
-        process_inner.need[current_task()
-            .unwrap()
-            .inner_exclusive_access()
-            .res
-            .as_ref()
-            .unwrap()
-            .tid][sem_id] += 1;
-    }else{
-        process_inner.available[sem_id] -= 1;
-        process_inner.allocation[current_task()
-            .unwrap()
-            .inner_exclusive_access()
-            .res
-            .as_ref()
-            .unwrap()
-            .tid][sem_id] += 1;
+    let tid = current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .res
+        .as_ref()
+        .unwrap()
+        .tid;
+    if sem_id != 0 {
+        let count = sem.inner.exclusive_access().count;
+        let mut cond = 0;
+        if count <= 0 {
+            if process_inner.available[sem_id] == 0 {
+                cond = 1;
+            }else{
+                cond = 2;
+            }
+            process_inner.available[sem_id] = 0;
+            process_inner.need[tid][sem_id] += 1;
+        }else{
+            process_inner.available[sem_id] -= 1;
+            process_inner.allocation[tid][sem_id] += 1;
+        }
+        
+        if process_inner.lockded_detect{
+            println!("lockded_detect start");
+            let mut work = process_inner.available.clone();
+            let mut need = process_inner.need.clone();
+            let mut finish = [false; 10];
+            let allocate = &process_inner.allocation;
+            finish[0] = true;
+            while finish.iter().any(|&x| !x){
+                let mut flag = false;
+                for i in 1..finish.len() {
+                    if !finish[i] && need[i].iter().enumerate().all(|(j, &x)| j == 0 || x <= work[j]) {
+                        for j in 1..work.len(){
+                            need[i][j] = 0;
+                            work[j] += allocate[i][j];
+                        }
+                        finish[i] = true;
+                        flag = true;
+                    }
+                }
+                if !flag {
+                    break;
+                }else{
+                    continue;
+                }
+            }
+            if finish.iter().all(|&x| x) {
+                drop(process_inner);
+                sem.down();
+                return 0;
+            }else{
+                if cond == 1 { 
+                    process_inner.available[sem_id] = 0;
+                    process_inner.need[tid][sem_id] -= 1;
+                }else if cond == 2 {
+                    process_inner.available[sem_id] = 1;
+                    process_inner.need[tid][sem_id] -= 1;
+                }else{
+                    process_inner.available[sem_id] += 1;
+                    process_inner.allocation[tid][sem_id] -= 1;
+                }
+                drop(process_inner);
+                return -0xdead;
+            }
+        }
     }
     drop(process_inner);
     sem.down();

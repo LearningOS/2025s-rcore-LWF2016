@@ -28,11 +28,11 @@ pub struct ProcessControlBlockInner {
     /// enabled lockdead detect
     pub lockded_detect: bool,
     /// available
-    pub available: [isize; 60],
+    pub available: [isize; 10],
     /// allocation
-    pub allocation: [[isize; 60]; 60],
+    pub allocation: [[isize; 10]; 10],
     /// need
-    pub need: [[isize; 60]; 60],
+    pub need: [[isize; 10]; 10],
     /// is zombie?
     pub is_zombie: bool,
     /// memory set(address space)
@@ -108,9 +108,9 @@ impl ProcessControlBlock {
             pid: pid_handle,
             inner: unsafe {
                 UPSafeCell::new(ProcessControlBlockInner {
-                    available: [0isize; 60],
-                    allocation: [[0isize; 60]; 60],
-                    need: [[0isize; 60]; 60],
+                    available: [0isize; 10],
+                    allocation: [[0isize; 10]; 10],
+                    need: [[0isize; 10]; 10],
                     lockded_detect: false,
                     is_zombie: false,
                     memory_set,
@@ -245,9 +245,9 @@ impl ProcessControlBlock {
             pid,
             inner: unsafe {
                 UPSafeCell::new(ProcessControlBlockInner {
-                    available: [0isize; 60],
-                    allocation: [[0isize; 60]; 60],
-                    need: [[0isize; 60]; 60],
+                    available: [0isize; 10],
+                    allocation: [[0isize; 10]; 10],
+                    need: [[0isize; 10]; 10],
                     lockded_detect: false,
                     is_zombie: false,
                     memory_set,
